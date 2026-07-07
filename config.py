@@ -10,4 +10,5 @@ class GPTConfig:
     n_heads: int = 12
     dropout: float = 0.1
     attention: str = "mha" 
+    qkv_bias:bool = False
 
