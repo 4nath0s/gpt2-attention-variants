@@ -4,3 +4,10 @@ venv/
 .venv/
 
 __pycache__/
+
+*.bin
+*.png
+*.pth
+
+models/
+curves/

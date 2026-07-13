@@ -19,9 +19,10 @@ class LayerNorm(nn.Module):
 class GELU(nn.Module):
     def __init__(self):
         super().__init__()
+        self.const = torch.sqrt(torch.tensor(2.0 / torch.pi))
         
     def forward(self, x):
-        return 0.5 * x * (1 + torch.tanh(torch.sqrt(torch.tensor(2.0 / torch.pi)) * (x + 0.044715 * torch.pow(x, 3))))
+        return 0.5 * x * (1 + torch.tanh(self.const * (x + 0.044715 * torch.pow(x, 3))))
     
     
 class FeedForward(nn.Module):
@@ -44,6 +45,12 @@ class TransformerBlock(nn.Module):
                 num_heads=cfg.n_heads,
                 dropout=cfg.dropout,
                 qkv_bias=cfg.qkv_bias)
+        elif cfg.attention == "gqa":
+            raise ValueError(f"gqa not implemented for the moment")
+        elif cfg.attention == "mla":
+            raise ValueError(f"mla not implemented for the moment")
+        else:
+            raise ValueError(f"Unknown attention variant : {cfg.attention!r}")
         self.ff = FeedForward(cfg)
         self.norm1 = LayerNorm(cfg.d_model)
         self.norm2 = LayerNorm(cfg.d_model)
