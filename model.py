@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from mha import MultiHeadAttention
+from gqa import GroupedQueryAttention
 
 class LayerNorm(nn.Module):
     def __init__(self, d_model):
@@ -46,7 +47,13 @@ class TransformerBlock(nn.Module):
                 dropout=cfg.dropout,
                 qkv_bias=cfg.qkv_bias)
         elif cfg.attention == "gqa":
-            raise ValueError(f"gqa not implemented for the moment")
+            self.att = GroupedQueryAttention(d_in=cfg.d_model,
+                d_out=cfg.d_model,
+                context_length=cfg.context_length,
+                num_heads=cfg.n_heads,
+                dropout=cfg.dropout,
+                num_groups=cfg.n_groups,
+                qkv_bias=cfg.qkv_bias)
         elif cfg.attention == "mla":
             raise ValueError(f"mla not implemented for the moment")
         else:
