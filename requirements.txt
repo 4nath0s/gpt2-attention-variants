@@ -1,1 +1,5 @@
-dataclass
+torch
+tiktoken
+datasets
+numpy
+matplotlib
