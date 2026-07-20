@@ -12,4 +12,5 @@ class GPTConfig:
     n_groups: int = 4 # 1(MQA), 2, 3, 4, 6 or 12(MHA)
     attention: str = "gqa" # "mha" | "gqa" | "mla"
     qkv_bias:bool = False
+    seed_number:int = 123
 

@@ -153,7 +153,7 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses,
 
 
 def main():
-    torch.manual_seed(123)
+    torch.manual_seed(cfg.seed_number)
 
     script_dir = Path(__file__).parent
 
