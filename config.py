@@ -13,4 +13,5 @@ class GPTConfig:
     attention: str = "gqa" # "mha" | "gqa" | "mla"
     qkv_bias:bool = False
     seed_number:int = 123
+    d_latent: int = 256
 

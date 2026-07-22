@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from mha import MultiHeadAttention
 from gqa import GroupedQueryAttention
+from mla import MultiHeadLatentAttention
 
 class LayerNorm(nn.Module):
     def __init__(self, d_model):
@@ -55,7 +56,14 @@ class TransformerBlock(nn.Module):
                 num_groups=cfg.n_groups,
                 qkv_bias=cfg.qkv_bias)
         elif cfg.attention == "mla":
-            raise ValueError(f"mla not implemented for the moment")
+            self.att = MultiHeadLatentAttention(
+                d_in=cfg.d_model,
+                d_out=cfg.d_model,
+                context_length=cfg.context_length,
+                num_heads=cfg.n_heads,
+                dropout=cfg.dropout,
+                d_latent=cfg.d_latent,
+                qkv_bias=cfg.qkv_bias)
         else:
             raise ValueError(f"Unknown attention variant : {cfg.attention!r}")
         self.ff = FeedForward(cfg)
