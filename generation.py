@@ -1,5 +1,6 @@
 import time
 from pathlib import Path
+import matplotlib.pyplot as plt
 
 import torch
 import tiktoken
@@ -41,30 +42,75 @@ def load_model(script_dir, device, variant):
     return model, cfg
 
 
+def comparison(script_dir, device, attentions, text, tokenizer, max_new_tokens=200):
+    results = {}
+
+    for variant in attentions:
+        try:
+            model, cfg = load_model(script_dir, device, variant)
+        except FileNotFoundError:
+            print(f"{variant} not found")
+            continue
+
+        encoded = text_to_token_ids(text, tokenizer).to(device)
+
+        t0 = time.time()
+        out = generate_text_cached(model, encoded, max_new_tokens, cfg.context_length, temperature=1, top_k=35)
+        gen_time = time.time() - t0
+
+        cache_bytes = sum(blk.att.cache_K.numel() * blk.att.cache_K.element_size() + blk.att.cache_V.numel() * blk.att.cache_V.element_size() for blk in model.trf_blocks)
+        seq_len = out.shape[1]
+
+        results[variant] = {
+            "params": sum(p.numel() for p in model.parameters()),
+            "gen_time_s": gen_time,
+            "tok_per_s": max_new_tokens / gen_time,
+            "cache_MB": cache_bytes / 1e6,
+            "cache_KB_per_token": cache_bytes / seq_len / 1e3,
+            "sample": token_ids_to_text(out, tokenizer),
+        }
+        
+        del model     
+        torch.cuda.empty_cache()
+
+    return results
+
+def plot_generation(results, save_dir=None):
+    metrics = {
+        "gen_time_s": ("Generation time (s)", 1, "{:.2f}"),
+        "tok_per_s": ("Flow rate (tokens/s)", 1, "{:.1f}"),
+        "cache_MB": ("Cache size KV (MB)", 1, "{:.1f}"),
+        "cache_KB_per_token": ("KV cache per token (KB)", 1, "{:.2f}"),
+    }
+    variants = list(results.keys())
+
+    if save_dir is not None:
+        save_dir = Path(save_dir)
+        save_dir.mkdir(exist_ok=True)
+
+    for key, (title, scale, fmt) in metrics.items():
+        values = [results[v][key] / scale for v in variants]
+        fig, ax = plt.subplots(figsize=(6, 4))
+        bars = ax.bar(variants, values, color="#170089")
+        ax.bar_label(bars, labels=[fmt.format(v) for v in values], padding=3)
+        ax.set_title(title)
+        ax.grid(axis="y", alpha=0.3)
+        ax.set_axisbelow(True)
+        fig.tight_layout()
+        if save_dir is not None:
+            fig.savefig(save_dir / f"{key}.png", dpi=150)
+
+    plt.show()
+
 def main():
     script_dir = Path(__file__).parent
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = tiktoken.get_encoding("gpt2")
 
-    t0 = time.time()
-    model, cfg = load_model(script_dir, device, "mha")
-    tm = time.time() - t0
-
- 
+    attentions = ["mha", "mqa", "gqa2", "gqa3", "gqa3", "gqa4", "gqa6"]
     prompt = "Once upon a time"
-    t0 = time.time()
-    encoded = text_to_token_ids(prompt, tokenizer).to(device)
-    te = time.time() - t0
-    N = 200
-
-    t0 = time.time()
-    out = generate_text_cached(model, encoded, N, cfg.context_length, temperature=1, top_k=35)
-    t = time.time() - t0
-
-    print(f"Time loading model : {tm}")
-    print(f"Time encoding : {te}")
-    print(f"Time : {t}")
-    print(token_ids_to_text(out, tokenizer))
+    results = comparison(script_dir, device, attentions, prompt, tokenizer, max_new_tokens=200)
+    plot_generation(results)
 
 
 if __name__ == "__main__":
