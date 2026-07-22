@@ -158,14 +158,13 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses, attention, n
 
 
 def main():
+    cfg = GPTConfig()
     torch.manual_seed(cfg.seed_number)
 
     script_dir = Path(__file__).parent
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = tiktoken.get_encoding("gpt2")
-
-    cfg = GPTConfig()
 
     model = GPTModel(cfg)
     model.to(device)
