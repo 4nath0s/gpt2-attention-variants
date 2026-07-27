@@ -57,8 +57,10 @@ def comparison(script_dir, device, attentions, text, tokenizer, max_new_tokens=2
         t0 = time.time()
         out = generate_text_cached(model, encoded, max_new_tokens, cfg.context_length, temperature=1, top_k=35)
         gen_time = time.time() - t0
-
-        cache_bytes = sum(blk.att.cache_K.numel() * blk.att.cache_K.element_size() + blk.att.cache_V.numel() * blk.att.cache_V.element_size() for blk in model.trf_blocks)
+        if variant != "mla":
+            cache_bytes = sum(blk.att.cache_K.numel() * blk.att.cache_K.element_size() + blk.att.cache_V.numel() * blk.att.cache_V.element_size() for blk in model.trf_blocks)
+        else :
+            cache_bytes = sum(blk.att.cache_ckv.numel() * blk.att.cache_ckv.element_size()for blk in model.trf_blocks)
         seq_len = out.shape[1]
 
         results[variant] = {
@@ -105,11 +107,12 @@ def plot_generation(results, save_dir=None):
 def main():
     script_dir = Path(__file__).parent
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
     tokenizer = tiktoken.get_encoding("gpt2")
 
-    attentions = ["mha", "mqa", "gqa2", "gqa3", "gqa3", "gqa4", "gqa6"]
+    attentions = ["mha", "mqa", "gqa2", "gqa3", "gqa3", "gqa4", "gqa6", "mla"]
     prompt = "Once upon a time"
-    results = comparison(script_dir, device, attentions, prompt, tokenizer, max_new_tokens=200)
+    results = comparison(script_dir, device, attentions, prompt, tokenizer, max_new_tokens=1000)
     plot_generation(results)
 
 
