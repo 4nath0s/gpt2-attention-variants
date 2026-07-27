@@ -129,20 +129,25 @@ def train_model_simple(model, train_loader, val_loader, optimizer, device,
     return train_losses, val_losses, track_tokens_seen
 
 
-def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses,
+def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses, attention, num_groups,
                 save_path=None):
     fig, ax1 = plt.subplots(figsize=(5, 3))
     ax1.plot(epochs_seen, train_losses, label="Training loss")
     ax1.plot(epochs_seen, val_losses, linestyle="-.",
              label="Validation loss")
     ax1.set_xlabel("Epochs")
-    ax1.set_ylabel("Loss")
+    ax1.set_ylabel("Cross Entropy Loss")
     ax1.legend(loc="upper right")
     ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
 
     ax2 = ax1.twiny()
     ax2.plot(tokens_seen, train_losses, alpha=0)
     ax2.set_xlabel("Tokens seen")
+
+    if attention == "gqa":
+        plt.title(f"model: {attention}, num groups: {num_groups}")
+    else:
+        plt.title(f"model: {attention}")
 
     fig.tight_layout()
     if save_path is not None:
@@ -153,14 +158,13 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses,
 
 
 def main():
-    torch.manual_seed(123)
+    cfg = GPTConfig()
+    torch.manual_seed(cfg.seed_number)
 
     script_dir = Path(__file__).parent
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     tokenizer = tiktoken.get_encoding("gpt2")
-
-    cfg = GPTConfig()
 
     model = GPTModel(cfg)
     model.to(device)
@@ -196,7 +200,8 @@ def main():
         context_size=cfg.context_length,
     )
 
-    ckpt_path = script_dir / "models" / f"model_and_optimizer_{cfg.attention}.pth"
+    suffix = f"{cfg.attention}{cfg.n_groups}" if cfg.attention == "gqa" else cfg.attention
+    ckpt_path = script_dir / "models" / f"model_and_optimizer_{suffix}.pth"
     ckpt_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({
         "model_state_dict": model.state_dict(),
@@ -206,8 +211,8 @@ def main():
     print(f"Checkpoint sauvegarde dans {ckpt_path}")
 
     epochs_tensor = torch.linspace(0, num_epochs, len(train_losses))
-    plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses,
-                save_path=script_dir / "curves" / f"loss_curves_{cfg.attention}.png")
+    plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses, cfg.attention, cfg.n_groups,
+                save_path=script_dir / "curves" / f"loss_curves_{suffix}.png")
 
 
 if __name__ == "__main__":
