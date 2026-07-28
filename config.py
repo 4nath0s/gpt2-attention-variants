@@ -14,4 +14,5 @@ class GPTConfig:
     qkv_bias:bool = False
     seed_number:int = 123
     d_latent: int = 256
+    window_size: int | None = 256 #1024 or None = classical causal mask 
 

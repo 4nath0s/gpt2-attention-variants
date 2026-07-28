@@ -1,8 +1,9 @@
 import torch
 import torch.nn as nn
+from mask import build_mask
 
 class GroupedQueryAttention(nn.Module):
-    def __init__(self, d_in, d_out, context_length, dropout, num_heads, num_groups, qkv_bias=False):
+    def __init__(self, d_in, d_out, context_length, dropout, num_heads, num_groups, qkv_bias=False, window_size=None):
         super().__init__()
         assert (d_out % num_heads == 0), "d_out must be divisible by num_heads"
         assert (num_heads % num_groups == 0), "num_groups must divide num_heads"
@@ -16,7 +17,8 @@ class GroupedQueryAttention(nn.Module):
         self.W_value = nn.Linear(d_in, self.head_dim * self.num_groups, bias=qkv_bias)
         self.out_proj = nn.Linear(d_out, d_out)
         self.dropout = nn.Dropout(dropout)
-        self.register_buffer("mask", torch.triu(torch.ones(context_length, context_length), diagonal=1))
+        self.window_size = window_size
+        self.register_buffer("mask", build_mask(context_length, window_size), persistent=False)
         self.cache_K = None
         self.cache_V = None
         
@@ -44,6 +46,10 @@ class GroupedQueryAttention(nn.Module):
         
             keys = self.cache_K
             values = self.cache_V
+            
+            if self.window_size is not None and self.cache_K.shape[2] > self.window_size:
+                self.cache_K = self.cache_K[:, :, -self.window_size:, :]
+                self.cache_V = self.cache_V[:, :, -self.window_size:, :]
           
         keys   = keys.repeat_interleave(self.group_size, dim=1)     # (b, 4, T, 64) → (b, 12, T, 64)
         values = values.repeat_interleave(self.group_size, dim=1)

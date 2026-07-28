@@ -46,7 +46,8 @@ class TransformerBlock(nn.Module):
                 context_length=cfg.context_length,
                 num_heads=cfg.n_heads,
                 dropout=cfg.dropout,
-                qkv_bias=cfg.qkv_bias)
+                qkv_bias=cfg.qkv_bias,
+                window_size = getattr(cfg, "window_size", None))
         elif cfg.attention == "gqa":
             self.att = GroupedQueryAttention(d_in=cfg.d_model,
                 d_out=cfg.d_model,
@@ -54,7 +55,8 @@ class TransformerBlock(nn.Module):
                 num_heads=cfg.n_heads,
                 dropout=cfg.dropout,
                 num_groups=cfg.n_groups,
-                qkv_bias=cfg.qkv_bias)
+                qkv_bias=cfg.qkv_bias,
+                window_size = getattr(cfg, "window_size", None))
         elif cfg.attention == "mla":
             self.att = MultiHeadLatentAttention(
                 d_in=cfg.d_model,
@@ -63,7 +65,8 @@ class TransformerBlock(nn.Module):
                 num_heads=cfg.n_heads,
                 dropout=cfg.dropout,
                 d_latent=cfg.d_latent,
-                qkv_bias=cfg.qkv_bias)
+                qkv_bias=cfg.qkv_bias,
+                window_size = getattr(cfg, "window_size", None))
         else:
             raise ValueError(f"Unknown attention variant : {cfg.attention!r}")
         self.ff = FeedForward(cfg)
