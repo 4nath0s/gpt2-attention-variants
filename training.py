@@ -173,6 +173,7 @@ def main():
 
     n_params = sum(p.numel() for p in model.parameters())
     print(f"Device: {device} | Parametres: {n_params:,}")
+    print(f"Attention: {cfg.attention}, groups: {cfg.n_groups}, window: {cfg.window_size}, cla factor: {cfg.cla_factor}")
 
     train_loader = DataLoader(
         GPTDatasetBin(script_dir / "train.bin", cfg.context_length),
@@ -200,7 +201,11 @@ def main():
         context_size=cfg.context_length,
     )
 
-    suffix = f"{cfg.attention}{cfg.n_groups}" if cfg.attention == "gqa" else cfg.attention
+    suffix = f"gqa{cfg.n_groups}" if cfg.attention == "gqa" else cfg.attention
+    if cfg.window_size is not None:
+        suffix += f"_w{cfg.window_size}"
+    if cfg.cla_factor > 1:
+        suffix += f"_cla{cfg.cla_factor}"
     ckpt_path = script_dir / "models" / f"model_and_optimizer_{suffix}.pth"
     ckpt_path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({

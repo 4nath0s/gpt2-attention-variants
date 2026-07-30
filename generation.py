@@ -36,7 +36,9 @@ def load_model(script_dir, device, variant):
     ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     cfg = ckpt["cfg"]
     model = GPTModel(cfg)
-    model.load_state_dict(ckpt["model_state_dict"])
+    incompat = model.load_state_dict(ckpt["model_state_dict"], strict=False)
+    assert not incompat.missing_keys, incompat.missing_keys
+    assert all(k.endswith(".mask") for k in incompat.unexpected_keys), incompat.unexpected_keys
     model.to(device)
     model.eval()
     return model, cfg
@@ -57,8 +59,8 @@ def comparison(script_dir, device, attentions, text, tokenizer, max_new_tokens=2
         t0 = time.time()
         out = generate_text_cached(model, encoded, max_new_tokens, cfg.context_length, temperature=1, top_k=35)
         gen_time = time.time() - t0
-        if variant != "mla":
-            cache_bytes = sum(blk.att.cache_K.numel() * blk.att.cache_K.element_size() + blk.att.cache_V.numel() * blk.att.cache_V.element_size() for blk in model.trf_blocks)
+        if cfg.attention != "mla":
+            cache_bytes = sum(blk.att.cache_K.numel() * blk.att.cache_K.element_size() + blk.att.cache_V.numel() * blk.att.cache_V.element_size() for blk in model.trf_blocks if blk.att.cache_K is not None)
         else :
             cache_bytes = sum(blk.att.cache_ckv.numel() * blk.att.cache_ckv.element_size()for blk in model.trf_blocks)
         seq_len = out.shape[1]
