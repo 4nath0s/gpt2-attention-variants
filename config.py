@@ -14,5 +14,6 @@ class GPTConfig:
     qkv_bias:bool = False
     seed_number:int = 123
     d_latent: int = 256
-    window_size: int | None = 256 #1024 or None = classical causal mask 
+    window_size: int | None = None #1024 or None = classical causal mask 
+    cla_factor: int = 1 # 1 = Cross layer attention disabled
 

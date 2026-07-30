@@ -20,7 +20,7 @@ class MultiHeadLatentAttention(nn.Module):
         self.register_buffer("mask", build_mask(context_length, window_size), persistent=False)
         self.cache_ckv = None
     
-    def forward(self, x, use_cache=False):
+    def forward(self, x, use_cache=False, kv=None):
         b, num_tokens, d_in = x.shape
         queries = self.W_query(x)
         c_kv = self.W_dkv(x)                                    
@@ -54,7 +54,7 @@ class MultiHeadLatentAttention(nn.Module):
 
         context_vec = context_vec.contiguous().view(b, num_tokens, self.d_out)
         context_vec = self.out_proj(context_vec)
-        return context_vec
+        return context_vec, kv
 
     
     def reset_cache(self):

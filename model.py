@@ -37,8 +37,10 @@ class FeedForward(nn.Module):
     
     
 class TransformerBlock(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg, layer_idx):
         super().__init__()
+        cla_factor = getattr(cfg, "cla_factor", 1)
+        share_kv = (cla_factor > 1) and (layer_idx % cla_factor != 0)
         if cfg.attention == "mha":
             self.att = MultiHeadAttention(
                 d_in=cfg.d_model,
@@ -47,7 +49,8 @@ class TransformerBlock(nn.Module):
                 num_heads=cfg.n_heads,
                 dropout=cfg.dropout,
                 qkv_bias=cfg.qkv_bias,
-                window_size = getattr(cfg, "window_size", None))
+                window_size = getattr(cfg, "window_size", None),
+                share_kv=share_kv)
         elif cfg.attention == "gqa":
             self.att = GroupedQueryAttention(d_in=cfg.d_model,
                 d_out=cfg.d_model,
@@ -56,7 +59,8 @@ class TransformerBlock(nn.Module):
                 dropout=cfg.dropout,
                 num_groups=cfg.n_groups,
                 qkv_bias=cfg.qkv_bias,
-                window_size = getattr(cfg, "window_size", None))
+                window_size = getattr(cfg, "window_size", None),
+                share_kv=share_kv)
         elif cfg.attention == "mla":
             self.att = MultiHeadLatentAttention(
                 d_in=cfg.d_model,
@@ -74,10 +78,10 @@ class TransformerBlock(nn.Module):
         self.norm2 = LayerNorm(cfg.d_model)
         self.drop_shortcut = nn.Dropout(cfg.dropout)
         
-    def forward(self, x, use_cache=False):
+    def forward(self, x, use_cache=False, kv=None):
         shortcut = x
         x = self.norm1(x)
-        x = self.att(x, use_cache=use_cache)
+        x, kv = self.att(x, use_cache=use_cache, kv=kv)
         x = self.drop_shortcut(x)
         x = x + shortcut
         shortcut = x
@@ -85,7 +89,7 @@ class TransformerBlock(nn.Module):
         x = self.ff(x)
         x = self.drop_shortcut(x)
         x = x + shortcut
-        return x
+        return x, kv
     
     
 class GPTModel(nn.Module):
@@ -95,7 +99,7 @@ class GPTModel(nn.Module):
         self.pos_emb = nn.Embedding(cfg.context_length, cfg.d_model)
         self.drop_emb = nn.Dropout(cfg.dropout)
 
-        self.trf_blocks = nn.ModuleList([TransformerBlock(cfg) for _ in range(cfg.n_layers)])
+        self.trf_blocks = nn.ModuleList([TransformerBlock(cfg, layer_idx=i) for i in range(cfg.n_layers)])
 
         self.final_norm = LayerNorm(cfg.d_model)
         self.out_head = nn.Linear(cfg.d_model, cfg.vocab_size, bias=False)
@@ -113,8 +117,9 @@ class GPTModel(nn.Module):
 
         x = self.tok_emb(in_idx) + self.pos_emb(pos)
         x = self.drop_emb(x)
+        kv = None
         for blk in self.trf_blocks:
-            x = blk(x, use_cache=use_cache)
+            x, kv = blk(x, use_cache=use_cache, kv=kv)
         x = self.final_norm(x)
         return self.out_head(x)
     
