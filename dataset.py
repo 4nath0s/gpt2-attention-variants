@@ -3,6 +3,8 @@ import tiktoken
 from torch.utils.data import Dataset, DataLoader
 
 
+# Dataset built from a raw text string, with overlapping windows (stride).
+# First version, not used by training.py anymore (replaced by GPTDatasetBin).
 class GPTDatasetV1(Dataset):
     def __init__(self, txt, tokenizer, max_length, stride):
         self.input_ids = []
@@ -10,6 +12,7 @@ class GPTDatasetV1(Dataset):
 
         token_ids = tokenizer.encode(txt, allowed_special={"<|endoftext|>"})
 
+        # target = same window shifted by one token (next-token prediction)
         for i in range(0, len(token_ids) - max_length, stride):
             input_chunk = token_ids[i:i + max_length]
             target_chunk = token_ids[i + 1:i + max_length + 1]
@@ -42,6 +45,9 @@ def create_dataloader_v1(txt, tokenizer=None, batch_size=4, max_length=256,
     
 import numpy as np
 
+# Dataset used for training: reads a .bin file from preprocess.py.
+# np.memmap so the file (~950 MB for train) is never fully loaded in RAM.
+# Samples are non-overlapping blocks of max_length tokens.
 class GPTDatasetBin(Dataset):
     def __init__(self, bin_path, max_length):
         self.data = np.memmap(bin_path, dtype=np.uint16, mode="r")
@@ -51,6 +57,7 @@ class GPTDatasetBin(Dataset):
         return (len(self.data) - 1) // self.max_length
 
     def __getitem__(self, idx):
+        # x = tokens [i, i+T), y = tokens [i+1, i+T+1)
         i = idx * self.max_length
         x = torch.from_numpy(self.data[i:i + self.max_length].astype(np.int64))
         y = torch.from_numpy(self.data[i + 1:i + self.max_length + 1].astype(np.int64))

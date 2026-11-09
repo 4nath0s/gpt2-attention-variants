@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
 
+# Model and run configuration, read by training.py.
+# To train another variant, change attention / n_groups / window_size / cla_factor here.
+# Default sizes = GPT-2 small (768 dims, 12 layers, 12 heads, 1024 context).
 @dataclass
 class GPTConfig:
     vocab_size: int = 50257
@@ -13,6 +16,7 @@ class GPTConfig:
     attention: str = "gqa" # "mha" | "gqa" | "mla"
     qkv_bias:bool = False
     seed_number:int = 123
+    # MLA only: size of the latent vector c_kv, which is the only thing cached
     d_latent: int = 256
     window_size: int | None = None #1024 or None = classical causal mask 
     cla_factor: int = 1 # 1 = Cross layer attention disabled
