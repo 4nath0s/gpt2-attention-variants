@@ -1,3 +1,6 @@
+# Trains the variant set in config.py for 1 epoch on TinyStories,
+# saves the checkpoint in models/ and the loss curves in curves/.
+# Training loop and helpers adapted from S. Raschka, Build a Large Language Model (From Scratch).
 import time
 from pathlib import Path
 
@@ -22,6 +25,8 @@ def token_ids_to_text(token_ids, tokenizer):
     return tokenizer.decode(flat.tolist())
 
 
+# Greedy decoding without KV cache: the whole sequence is recomputed at each step.
+# Only used to print samples during training.
 def generate_text_simple(model, idx, max_new_tokens, context_size):
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -context_size:]
@@ -50,6 +55,7 @@ def generate_and_print_sample(model, tokenizer, device, start_context,
 def calc_loss_batch(input_batch, target_batch, model, device):
     input_batch = input_batch.to(device)
     target_batch = target_batch.to(device)
+    # bf16 autocast on GPU: faster and less memory
     with torch.autocast(device_type="cuda", dtype=torch.bfloat16,
                         enabled=(device.type == "cuda")):
         logits = model(input_batch)
@@ -59,6 +65,7 @@ def calc_loss_batch(input_batch, target_batch, model, device):
     return loss
 
 
+# mean loss over the first num_batches batches (quick estimate, not the whole set)
 def calc_loss_loader(data_loader, model, device, num_batches=None):
     total_loss = 0.0
     if len(data_loader) == 0:
@@ -104,6 +111,7 @@ def train_model_simple(model, train_loader, val_loader, optimizer, device,
             tokens_seen += input_batch.numel()
             global_step += 1
 
+            # every eval_freq steps: estimate train/val loss on eval_iter batches
             if global_step % eval_freq == 0:
                 train_loss, val_loss = evaluate_model(
                     model, train_loader, val_loader, device, eval_iter
@@ -129,6 +137,7 @@ def train_model_simple(model, train_loader, val_loader, optimizer, device,
     return train_losses, val_losses, track_tokens_seen
 
 
+# loss vs epochs (bottom axis) and vs tokens seen (top axis)
 def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses, attention, num_groups,
                 save_path=None):
     fig, ax1 = plt.subplots(figsize=(5, 3))
@@ -172,9 +181,10 @@ def main():
                                   lr=4e-4, weight_decay=0.1)
 
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"Device: {device} | Parametres: {n_params:,}")
+    print(f"Device: {device} | Parameters: {n_params:,}")
     print(f"Attention: {cfg.attention}, groups: {cfg.n_groups}, window: {cfg.window_size}, cla factor: {cfg.cla_factor}")
 
+    # batches of 4 sequences of context_length tokens
     train_loader = DataLoader(
         GPTDatasetBin(script_dir / "train.bin", cfg.context_length),
         batch_size=4, shuffle=True, drop_last=True,
@@ -187,8 +197,8 @@ def main():
     print(f"Train batches: {len(train_loader)}, "
           f"Val batches: {len(val_loader)}")
     assert len(val_loader) > 0, (
-        "val_loader vide : val.bin manquant ou plus court que "
-        "context_length. Lancer preprocess.py d'abord."
+        "val_loader is empty: val.bin is missing or shorter than "
+        "context_length. Run preprocess.py first."
     )
 
     
@@ -201,6 +211,7 @@ def main():
         context_size=cfg.context_length,
     )
 
+    # checkpoint name: mha / gqa<n_groups> / mla, + _w<window> and _cla<factor> if used
     suffix = f"gqa{cfg.n_groups}" if cfg.attention == "gqa" else cfg.attention
     if cfg.window_size is not None:
         suffix += f"_w{cfg.window_size}"
@@ -208,12 +219,14 @@ def main():
         suffix += f"_cla{cfg.cla_factor}"
     ckpt_path = script_dir / "models" / f"model_and_optimizer_{suffix}.pth"
     ckpt_path.parent.mkdir(parents=True, exist_ok=True)
+    # cfg is saved with the weights so generation.py can rebuild the same model
+    # (that is why torch.load needs weights_only=False)
     torch.save({
         "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "cfg": cfg,
     }, ckpt_path)
-    print(f"Checkpoint sauvegarde dans {ckpt_path}")
+    print(f"Checkpoint saved to {ckpt_path}")
 
     epochs_tensor = torch.linspace(0, num_epochs, len(train_losses))
     plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses, cfg.attention, cfg.n_groups,
